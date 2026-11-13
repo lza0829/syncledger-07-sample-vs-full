@@ -9,6 +9,11 @@ router = APIRouter(tags=["batches"])
 class RunBody(BaseModel):
     pair_id: int
     note: str | None = None
+    # One primary strategy per batch: 'full' line-by-line or 'sample' scout.
+    mode: str | None = None
+    sample_seed: str | None = None
+    sample_rate: float | None = None
+    sample_cap: int | None = None
 
 
 @router.get("/batches")
@@ -24,6 +29,13 @@ def list_diffs(batch_id: int | None = None, pair_id: int | None = None):
 @router.post("/reconcile")
 def run_reconcile(body: RunBody):
     try:
-        return svc.run_reconcile(body.pair_id, body.note)
+        return svc.run_reconcile(
+            body.pair_id,
+            body.note,
+            mode=body.mode,
+            sample_seed=body.sample_seed,
+            sample_rate=body.sample_rate,
+            sample_cap=body.sample_cap,
+        )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e

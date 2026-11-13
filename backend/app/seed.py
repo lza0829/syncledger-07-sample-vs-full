@@ -77,6 +77,7 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY,
                 batch_no TEXT NOT NULL UNIQUE,
                 pair_id INTEGER NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'full',
                 status TEXT NOT NULL,
                 left_rows INTEGER NOT NULL,
                 right_rows INTEGER NOT NULL,
@@ -85,6 +86,15 @@ def init_db() -> None:
                 right_only INTEGER NOT NULL,
                 field_mismatch INTEGER NOT NULL,
                 diff_total INTEGER NOT NULL,
+                sample_size INTEGER,
+                sample_seed TEXT,
+                sample_rate REAL,
+                sample_population INTEGER,
+                sample_size_formula TEXT,
+                sample_meta_json TEXT,
+                conflicted INTEGER NOT NULL DEFAULT 0,
+                conflict_of_batch_id INTEGER,
+                conflict_detail_json TEXT,
                 note TEXT,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(pair_id) REFERENCES reconcile_pairs(id)
@@ -178,6 +188,43 @@ def init_db() -> None:
                 "INSERT INTO settings(key, value) VALUES (?, ?)",
                 ("auto_overwrite", "false"),
             )
+        _migrate_batch_mode_columns(conn)
+        _seed_mode_settings(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+_BATCH_ADDED_COLUMNS = {
+    # column -> DDL fragment
+    "mode": "TEXT NOT NULL DEFAULT 'full'",
+    "sample_size": "INTEGER",
+    "sample_seed": "TEXT",
+    "sample_rate": "REAL",
+    "sample_population": "INTEGER",
+    "sample_size_formula": "TEXT",
+    "sample_meta_json": "TEXT",
+    "conflicted": "INTEGER NOT NULL DEFAULT 0",
+    "conflict_of_batch_id": "INTEGER",
+    "conflict_detail_json": "TEXT",
+}
+
+
+def _migrate_batch_mode_columns(conn) -> None:
+    """Add sample/full mode columns to databases created by the base cut."""
+    existing = {r["name"] for r in conn.execute("PRAGMA table_info(reconcile_batches)").fetchall()}
+    for column, ddl in _BATCH_ADDED_COLUMNS.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE reconcile_batches ADD COLUMN {column} {ddl}")
+
+
+def _seed_mode_settings(conn) -> None:
+    defaults = {
+        "default_reconcile_mode": "full",
+        "default_sample_rate": "0.4",
+        "sample_size_cap": "25",
+    }
+    for key, value in defaults.items():
+        conn.execute(
+            "INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (key, value)
+        )

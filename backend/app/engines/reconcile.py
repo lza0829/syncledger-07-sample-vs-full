@@ -25,16 +25,32 @@ def _index(rows: list[dict[str, Any]], align_keys: list[str]) -> dict[tuple, dic
     return out
 
 
+def aligned_universe(
+    left_rows: list[dict[str, Any]],
+    right_rows: list[dict[str, Any]],
+    *,
+    align_keys: list[str],
+) -> list[tuple]:
+    """All composite keys present on either side, in a stable sorted order."""
+    left_idx = _index(left_rows, align_keys)
+    right_idx = _index(right_rows, align_keys)
+    return sorted(set(left_idx) | set(right_idx), key=lambda t: tuple(str(x) for x in t))
+
+
 def compare_sides(
     left_rows: list[dict[str, Any]],
     right_rows: list[dict[str, Any]],
     *,
     align_keys: list[str],
     compare_fields: list[str],
+    key_filter: list[tuple] | None = None,
 ) -> dict[str, Any]:
     left_idx = _index(left_rows, align_keys)
     right_idx = _index(right_rows, align_keys)
-    all_keys = sorted(set(left_idx) | set(right_idx), key=lambda t: tuple(str(x) for x in t))
+    all_keys = aligned_universe(left_rows, right_rows, align_keys=align_keys)
+    if key_filter is not None:
+        allowed = set(key_filter)
+        all_keys = [k for k in all_keys if k in allowed]
 
     diffs: list[dict[str, Any]] = []
     counts = {

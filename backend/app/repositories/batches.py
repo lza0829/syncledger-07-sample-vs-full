@@ -9,7 +9,15 @@ import sqlite3
 def _batch(r: sqlite3.Row | None) -> dict[str, Any] | None:
     if r is None:
         return None
-    return dict(r)
+    d = dict(r)
+    d["conflicted"] = bool(d.get("conflicted"))
+    d["sample_meta"] = json.loads(d.pop("sample_meta_json")) if d.get("sample_meta_json") else None
+    d["conflict_detail"] = (
+        json.loads(d.pop("conflict_detail_json")) if d.get("conflict_detail_json") else None
+    )
+    d.pop("sample_meta_json", None)
+    d.pop("conflict_detail_json", None)
+    return d
 
 
 def _diff(r: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -55,21 +63,26 @@ def insert_batch(
     *,
     batch_no: str,
     pair_id: int,
+    mode: str,
     status: str,
     counts: dict[str, int],
     note: str | None,
     created_at: str,
+    sample_meta: dict[str, Any] | None = None,
 ) -> int:
     cur = conn.execute(
         """
         INSERT INTO reconcile_batches(
-            batch_no, pair_id, status, left_rows, right_rows, matched,
-            left_only, right_only, field_mismatch, diff_total, note, created_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            batch_no, pair_id, mode, status, left_rows, right_rows, matched,
+            left_only, right_only, field_mismatch, diff_total,
+            sample_size, sample_seed, sample_rate, sample_population,
+            sample_size_formula, sample_meta_json, note, created_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             batch_no,
             pair_id,
+            mode,
             status,
             counts["left_rows"],
             counts["right_rows"],
@@ -78,11 +91,38 @@ def insert_batch(
             counts["right_only"],
             counts["field_mismatch"],
             counts["diff_total"],
+            (sample_meta or {}).get("sample_size"),
+            (sample_meta or {}).get("seed"),
+            (sample_meta or {}).get("rate"),
+            (sample_meta or {}).get("population"),
+            (sample_meta or {}).get("size_formula"),
+            json.dumps(sample_meta, ensure_ascii=False) if sample_meta else None,
             note,
             created_at,
         ),
     )
     return int(cur.lastrowid)
+
+
+def mark_conflicted(
+    conn: sqlite3.Connection,
+    *,
+    batch_id: int,
+    full_batch_id: int,
+    detail: dict[str, Any],
+) -> None:
+    """Void/downgrade a scout batch after a contradicting full review."""
+    conn.execute(
+        """
+        UPDATE reconcile_batches
+        SET conflicted=1,
+            status='conflicted',
+            conflict_of_batch_id=?,
+            conflict_detail_json=?
+        WHERE id=?
+        """,
+        (full_batch_id, json.dumps(detail, ensure_ascii=False), batch_id),
+    )
 
 
 def insert_diff(

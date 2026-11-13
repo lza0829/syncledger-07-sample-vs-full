@@ -108,3 +108,31 @@ input, select, textarea {
 }
 .stat-num { font-size: 1.45rem; font-weight: 700; }
 .stat-label { color: var(--muted); font-size: 0.82rem; }
+.mode-switch { display: flex; gap: 0.6rem; margin-bottom: 0.6rem; }
+.mode-btn {
+  background: #dce6ef;
+  color: var(--accent-2);
+  border: 1px solid var(--line);
+  font-weight: 550;
+  min-width: 11rem;
+}
+.mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent-2);
+}
+.sample-box {
+  border: 1px dashed var(--warn);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+  background: #fdf8ee;
+}
+.conflict-box {
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+  background: #faf0f0;
+}
+th { white-space: nowrap; }
